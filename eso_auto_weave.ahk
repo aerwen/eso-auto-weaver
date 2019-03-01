@@ -3,6 +3,9 @@
 ; version: 1.3
 ;=============================================
 
+; script is disabled by default -- to enable caps lock most be toggled ON
+; some menus will auto disable (untoggle) to allow for numeric inputs
+
 #SingleInstance, force
 #NoEnv
 
