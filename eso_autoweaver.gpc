@@ -1,0 +1,312 @@
+/* ===============================================================  
+*  ESO auto weaver
+* ---------------------------------------------------------------
+* Version : 3.0
+* =============================================================== */
+// By default script is disbaled, (hold RIGHT to enable)
+int is_enabled              = FALSE; // TRUE; 
+
+// Extended support for rotation is provided via [full_tilt_mode]
+int full_tilt_mode          = FALSE; // fully automated rotation                               
+/* ============================================================== */
+// input values
+define pressed             = 100; // full button press
+define partial             = 75;  // the minimal pressure for LA
+define release             = 0;
+/* -------------------------------------------------------------- */
+// button mappings
+define X                   = XB1_X;
+define Y                   = XB1_Y;
+define B                   = XB1_B;
+define LT                  = XB1_LT;
+define RT                  = XB1_RT;
+define LEFT                = XB1_LEFT;
+define RIGHT               = XB1_RIGHT;
+define UP                  = XB1_UP;
+define DOWN                = XB1_DOWN;
+define ULTI                = XB1_RB;
+/* -------------------------------------------------------------- */
+// timings | 
+// values will require configuration depending on network latency; 
+// variance is also notcieable between controllers and weapon types
+define script_delay        = 200; // duration for script state changes
+define tap_delay           = 60;  // set range 60 - 100 if issues
+define input_delay         = 150; // ping dependant: range 100 - 200
+define l_attack_delay      = 190; // ping dependant: range 150 - 200
+define h_attack_delay      = 1750;// fire staff (differs per weapon?)
+define combo_delay         = 200; // delay next combo by X-ms (full tilt)
+// for heavy attack timings see: https://beth.games/2DLLTKn
+// options |
+define rumble_strength     = 15;  // script rumble strength (0 - 100)
+define rumble_duration     = 100; // time to vibrate when enabled (ms)
+/* -------------------------------------------------------------- */
+// mutable variables
+int sk_button;
+int ac_button;
+/* ===============================================================
+*  script loop
+* =============================================================== */
+
+main {
+	
+	// enable if [RIGHT] is held on d-pad for duration of [script_delay]x2 (to avoid menu enabling)
+	if(button_held(RIGHT, script_delay*2)){
+		if(!is_enabled) { enable_script(TRUE); }		
+	}
+
+    // disable if [LEFT] is held on d-pad for duration of [script_delay]
+	if(button_held(LEFT, script_delay)){
+		if(is_enabled) { 
+			enable_script(FALSE);
+			cancel_full_tilt();
+		}		
+	}
+
+	// disable when menus are activated, and when mounted
+	if(event_press(XB1_XBOX) || event_press(XB1_MENU) || event_press(XB1_VIEW)) {
+		if(is_enabled) { 
+			enable_script(FALSE);
+			cancel_full_tilt();
+		}
+	}
+	
+	// run when enabled only
+	if(is_enabled) { 
+		if(!full_tilt_mode) { run_weave_logic(); } 
+		else { run_full_tilt_logic(); }
+		
+		if(event_press(ULTI)) { 
+			combo_run(ULTIMATE); 
+		}
+		
+		if(event_press(DOWN)) { 
+			combo_run(SYNERGIZE); 
+		}		
+	}
+}
+
+/* ===============================================================
+*  functions
+* =============================================================== */
+
+/* enables the script and notify active state changed */
+function enable_script(state_change) {
+	is_enabled = state_change;
+	combo_run(NOTIFY);
+}
+
+/* light weaving :: fine tuning of [timings] required */
+function run_weave_logic() {
+
+	// you should have ground AoE set to instant in game options
+	if((get_val(B) ^^ get_val(X) ^^ get_val(Y))){// ^^ get_val(RT))){
+		ac_button = LT;
+		
+	    if(event_press(B)) {
+		    sk_button = B; 	
+			combo_run(LIGHT_WEAVE);	    	
+	    }
+	   
+		if(event_press(Y)) {
+			sk_button = Y; 
+	    	combo_run(LIGHT_WEAVE);
+		}
+		
+		if(event_press(X)) {
+			sk_button = X;
+			combo_run(LIGHT_WEAVE);	    	
+		}
+		
+		//if(event_press(RT)) {
+		//	combo_run(HEAVY);	    	
+		//}	
+		
+	} 
+
+	// full tilt mode activator
+	if((button_held(XB1_LB, script_delay*2))) { 
+		full_tilt_mode = TRUE;
+		combo_run(NOTIFY);
+	}
+	
+}
+
+/* initiate the full tilt combo */
+function run_full_tilt_logic() {
+
+	// ignore button presses if not combo trigger
+	if(event_press(Y)) {	set_val(Y, release); }
+
+	// initiate full tilt combo (deactivate with LT/block, or B)
+	if(event_press(X) && !(combo_running(FULL_TILT))){ 
+				
+		set_val(X, release);		
+		if(!(combo_running(FULL_TILT_BOOGIE))) { 
+			combo_run(FULL_TILT); 
+		} 
+	}
+	
+    // kill [full_tilt] when blocking or back out with [B]
+	if((get_val(B)) || (button_held(LT, script_delay*2))) {
+		cancel_full_tilt();
+	}
+	
+}
+
+/* helper returns [ true | false ] for button held for duration */
+function button_held(button, duration) {
+	return (get_val(button) && (get_ptime(button) > duration));
+}
+
+/* combo cancel helper */
+function cancel_full_tilt() {
+	if(combo_running(FULL_TILT_BOOGIE) || combo_running(FULL_TILT)) { 
+		full_tilt_mode = FALSE;
+		
+		combo_stop(FULL_TILT);
+		combo_stop(FULL_TILT_BOOGIE);
+
+		combo_run(NOTIFY);
+	}
+}
+
+/* ===============================================================
+*  combos
+* =============================================================== */
+
+combo SWAP_WEAVE {
+	ac_button = LEFT;
+	call(LIGHT_WEAVE);
+	ac_button = LT;
+}
+
+combo NO_WEAVE {
+	set_val(sk_button, release);
+	
+	/* ------------------------ */    
+	// Skill Trigger   
+	/* ------------------------ */    
+	set_val(sk_button, pressed);
+	wait(tap_delay);         //060
+	set_val(sk_button, release);
+	
+	wait(350);               //350
+	
+	/* ------------------------ */    
+	// Animation Cancel    
+	/* ------------------------ */    
+	set_val(ac_button, pressed);
+	wait(tap_delay);         //060
+	set_val(ac_button, release);
+	
+	/* ------------------------ */    
+	// GCD Remainder   
+	/* ------------------------ */
+	
+	wait(530);               //530
+}
+
+combo LIGHT_WEAVE {    /* 800ms */
+	set_val(sk_button, release);
+
+	set_val(RT, partial);
+	wait(l_attack_delay);    //190
+	set_val(RT, release);
+	
+	wait(input_delay);       //150
+	
+	/* ------------------------ */    
+	// Skill Trigger   
+	/* ------------------------ */    
+	set_val(sk_button, pressed);
+	wait(tap_delay);         //060
+	set_val(sk_button, release);
+	
+	wait(340);               //340
+	
+	/* ------------------------ */    
+	// Animation Cancel    
+	/* ------------------------ */    
+	set_val(ac_button, pressed);
+	wait(tap_delay);         //060
+	set_val(ac_button, release);
+	
+	/* ------------------------ */    
+	// GCD Remainder   
+	/* ------------------------ */
+	
+	//wait(0);               //000
+
+}
+
+combo HEAVY {         /* 1750ms */
+	set_val(RT, pressed);
+	wait(h_attack_delay);
+	set_val(RT, release);
+}
+
+/* one button ultimate -- pull during heavy attack for minimal drop in dps */
+combo ULTIMATE {
+	set_val(ULTI, release);
+	
+	set_val(XB1_RB, pressed);	
+	set_val(XB1_LB, pressed);	
+	
+	wait(tap_delay);
+	
+	set_val(XB1_RB, release);
+	set_val(XB1_LB, release);
+
+}
+
+/* one button synergy */
+combo SYNERGIZE { 
+	set_val(DOWN, release);
+	
+	set_val(Y, pressed);	
+	set_val(B, pressed);	
+	
+	wait(tap_delay);
+	
+	set_val(Y, release);
+	set_val(B, release);
+	
+}
+
+/* the vibration notification */
+combo NOTIFY {
+	set_rumble(RUMBLE_RT, rumble_strength); 
+	set_rumble(RUMBLE_LT, rumble_strength);	
+	
+	wait(rumble_duration);	
+	reset_rumble();
+}
+
+combo FULL_TILT {
+	set_val(sk_button, release);
+	
+	/* ------------------------ */
+	// Rotation x
+	/* ------------------------ */    
+	call(FULL_TILT_BOOGIE);
+	/* ======================== */
+	
+	// repeat required number of times
+
+	call(NOTIFY); // rumble indicates restart
+
+}
+
+combo FULL_TILT_BOOGIE {  /* 24s*/
+	set_val(sk_button, release);
+		
+	// configure rotation here
+	
+	// set wait(combo_delay) after each step to prevent misfires
+	/* ======================== */
+
+}
+
+/* ===============================================================
+*  EOF
+* =============================================================== */ 
